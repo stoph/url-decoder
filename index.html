@@ -252,6 +252,20 @@
             background: #6b7280;
         }
 
+        .sort-btn {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+            color: #6b7280;
+            transition: color 0.2s ease;
+        }
+
+        .sort-btn:hover {
+            color: #374151;
+        }
+
         @media (max-width: 768px) {
             .input-group {
                 flex-direction: column;
@@ -301,6 +315,11 @@
     </div>
 
     <script>
+        let isAlphabetical = true;
+        let showDecoded = true;
+        let originalParams = [];
+        let currentParams = [];
+
         function decodeUrlParameters() {
             const urlInput = document.getElementById('urlInput');
             const resultsSection = document.getElementById('resultsSection');
@@ -335,37 +354,82 @@
                     return;
                 }
 
-                // Create table
-                const table = document.createElement('table');
-                table.className = 'parameters-table';
+                // Get decoded values using URLSearchParams (original working method)
+                const decodedParams = Array.from(params.entries());
                 
-                // Create header
-                const thead = document.createElement('thead');
-                thead.innerHTML = `
-                    <tr>
-                        <th style="width: 200px;">Parameter</th>
-                        <th>Decoded Value</th>
-                        <th style="width: 100px;">Actions</th>
-                    </tr>
-                `;
-                table.appendChild(thead);
+                // Parse raw query string to get encoded values
+                const queryString = urlObj.search.substring(1);
+                const encodedParams = [];
+                const pairs = queryString.split('&');
                 
-                // Create body
-                const tbody = document.createElement('tbody');
+                for (const pair of pairs) {
+                    const equalIndex = pair.indexOf('=');
+                    if (equalIndex > 0) {
+                        const key = pair.substring(0, equalIndex);
+                        const encodedValue = pair.substring(equalIndex + 1);
+                        encodedParams.push([key, encodedValue]);
+                    }
+                }
+
+                // Combine decoded and encoded values
+                const combinedParams = decodedParams.map(([key, decodedValue]) => {
+                    const encodedEntry = encodedParams.find(([k]) => k === key);
+                    const encodedValue = encodedEntry ? encodedEntry[1] : decodedValue;
+                    return [key, encodedValue, decodedValue];
+                });
+
+                // Store original order and current order
+                originalParams = combinedParams;
+                currentParams = [...combinedParams];
                 
-                // Sort parameters alphabetically
-                const sortedParams = Array.from(params.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                // Sort alphabetically by default
+                currentParams.sort((a, b) => a[0].localeCompare(b[0]));
+                isAlphabetical = true;
+                showDecoded = true;
                 
-                sortedParams.forEach(([key, value]) => {
-                    const row = document.createElement('tr');
-                    
-                    // Decode the value
-                    const decodedValue = decodeURIComponent(value);
-                    
-                    // Check if it looks like JSON
-                    let isJson = false;
-                    let formattedValue = decodedValue;
-                    
+                renderTable();
+                
+            } catch (error) {
+                alert('Invalid URL: ' + error.message);
+            }
+        }
+
+        function renderTable() {
+            const parametersContainer = document.getElementById('parametersContainer');
+            parametersContainer.innerHTML = '';
+
+            // Create table
+            const table = document.createElement('table');
+            table.className = 'parameters-table';
+            
+            // Create header
+            const thead = document.createElement('thead');
+            thead.innerHTML = `
+                <tr>
+                    <th style="width: 200px;">
+                        Key
+                        <button id="sortBtn" class="sort-btn" title="Toggle sort order">🔀</button>
+                    </th>
+                    <th>
+                        <span id="valueHeader">Decoded Value</span>
+                        <button id="valueToggleBtn" class="sort-btn" title="Toggle between decoded and encoded values">🔄</button>
+                    </th>
+                    <th style="width: 100px;">Actions</th>
+                </tr>
+            `;
+            table.appendChild(thead);
+            
+            // Create body
+            const tbody = document.createElement('tbody');
+            
+            currentParams.forEach(([key, encodedValue, decodedValue]) => {
+                const row = document.createElement('tr');
+                
+                // Check if it looks like JSON (only for decoded values)
+                let isJson = false;
+                let formattedValue = decodedValue;
+                
+                if (showDecoded) {
                     try {
                         if (decodedValue.startsWith('{') && decodedValue.endsWith('}')) {
                             const parsed = JSON.parse(decodedValue);
@@ -375,28 +439,68 @@
                     } catch (e) {
                         // Not JSON, keep as is
                     }
-                    
-                    row.innerHTML = `
-                        <td>
-                            <span class="parameter-name">${key}</span>
-                        </td>
-                        <td>
-                            <div class="parameter-value ${isJson ? 'json' : ''}">${formattedValue}</div>
-                        </td>
-                        <td>
-                            <button class="copy-btn" onclick="copyToClipboard('${key}', \`${formattedValue.replace(/`/g, '\\`')}\`)">Copy</button>
-                        </td>
-                    `;
-                    
-                    tbody.appendChild(row);
-                });
+                }
                 
-                table.appendChild(tbody);
-                parametersContainer.appendChild(table);
+                // Choose which value to display
+                const displayValue = showDecoded ? formattedValue : encodedValue;
+                const copyValue = showDecoded ? formattedValue : encodedValue;
                 
-            } catch (error) {
-                alert('Invalid URL: ' + error.message);
+                row.innerHTML = `
+                    <td>
+                        <span class="parameter-name">${key}</span>
+                    </td>
+                    <td>
+                        <div class="parameter-value ${isJson && showDecoded ? 'json' : ''}">${displayValue}</div>
+                    </td>
+                    <td>
+                        <button class="copy-btn" onclick="copyToClipboard('${key}', \`${copyValue.replace(/`/g, '\\`')}\`)">Copy</button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            table.appendChild(tbody);
+            parametersContainer.appendChild(table);
+            
+            // Re-attach event listeners and update button states
+            document.getElementById('sortBtn').addEventListener('click', toggleSort);
+            document.getElementById('valueToggleBtn').addEventListener('click', toggleValueDisplay);
+            updateSortButton();
+            updateValueToggleButton();
+        }
+
+        function toggleSort() {
+            isAlphabetical = !isAlphabetical;
+            
+            if (isAlphabetical) {
+                currentParams = [...originalParams].sort((a, b) => a[0].localeCompare(b[0]));
+            } else {
+                currentParams = [...originalParams];
             }
+            
+            updateSortButton();
+            renderTable();
+        }
+
+        function toggleValueDisplay() {
+            showDecoded = !showDecoded;
+            updateValueToggleButton();
+            renderTable();
+        }
+
+        function updateSortButton() {
+            const sortBtn = document.getElementById('sortBtn');
+            sortBtn.textContent = isAlphabetical ? '🔀' : '🔤';
+            sortBtn.title = isAlphabetical ? 'Switch to original order' : 'Sort alphabetically';
+        }
+
+        function updateValueToggleButton() {
+            const valueToggleBtn = document.getElementById('valueToggleBtn');
+            const valueHeader = document.getElementById('valueHeader');
+            valueToggleBtn.textContent = showDecoded ? '🔄' : '📝';
+            valueToggleBtn.title = showDecoded ? 'Show encoded values' : 'Show decoded values';
+            valueHeader.textContent = showDecoded ? 'Decoded Value' : 'Raw Value';
         }
 
         function copyToClipboard(key, value) {
