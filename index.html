@@ -91,6 +91,28 @@
             transform: translateY(0);
         }
 
+        .share-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .share-btn:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .share-btn:active {
+            transform: translateY(0);
+        }
+
         .example-url {
             background: #f8fafc;
             padding: 15px;
@@ -262,6 +284,7 @@
                     placeholder="Paste your URL here..."
                 >
                 <button id="decodeBtn" class="decode-btn">Decode URL</button>
+                <button id="shareBtn" class="share-btn" style="display: none;">Share</button>
             </div>
         </div>
 
@@ -297,6 +320,9 @@
                 
                 // Show results section
                 resultsSection.style.display = 'block';
+                
+                // Show share button
+                document.getElementById('shareBtn').style.display = 'inline-block';
                 
                 // Display original URL
                 originalUrlElement.textContent = url;
@@ -376,35 +402,11 @@
         function copyToClipboard(key, value) {
             const textToCopy = value;
             
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    showCopyFeedback(event.target);
-                }).catch(() => {
-                    fallbackCopyTextToClipboard(textToCopy, event.target);
-                });
-            } else {
-                fallbackCopyTextToClipboard(textToCopy, event.target);
-            }
-        }
-
-        function fallbackCopyTextToClipboard(text, button) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            
-            try {
-                document.execCommand('copy');
-                showCopyFeedback(button);
-            } catch (err) {
-                console.error('Fallback: Could not copy text: ', err);
-            }
-            
-            document.body.removeChild(textArea);
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showCopyFeedback(event.target);
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+            });
         }
 
         function showCopyFeedback(button) {
@@ -418,18 +420,45 @@
             }, 2000);
         }
 
+        function shareUrl() {
+            const urlInput = document.getElementById('urlInput');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                alert('No URL to share');
+                return;
+            }
+
+            // Create shareable URL with the URL as a hash (unencoded)
+            const shareableUrl = window.location.origin + window.location.pathname + '#' + url;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(shareableUrl).then(() => {
+                showCopyFeedback(document.getElementById('shareBtn'));
+            }).catch(err => {
+                console.error('Could not copy text: ', err);
+            });
+        }
+
         // Event listeners
         document.getElementById('decodeBtn').addEventListener('click', decodeUrlParameters);
+        document.getElementById('shareBtn').addEventListener('click', shareUrl);
         document.getElementById('urlInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 decodeUrlParameters();
             }
         });
 
-        // Auto-decode on page load if there's a URL in the input
+        // Auto-decode on page load if there's a URL in the input or hash
         window.addEventListener('load', function() {
             const urlInput = document.getElementById('urlInput');
-            if (urlInput.value.trim()) {
+            const hash = window.location.hash;
+            
+            if (hash && hash.length > 1) {
+                const urlFromHash = hash.substring(1); // Remove the # character
+                urlInput.value = urlFromHash;
+                decodeUrlParameters();
+            } else if (urlInput.value.trim()) {
                 decodeUrlParameters();
             }
         });
